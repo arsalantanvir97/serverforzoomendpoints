@@ -1,16 +1,19 @@
 //include required modules
 const jwt = require('jsonwebtoken')
 const config = require('./config')
+const nodemailer = require('nodemailer')
 const rp = require('request-promise')
 const cors = require('cors')
 const express = require('express')
 const app = express()
+app.use(express.json())
+
 app.use(cors())
 app.options('*', cors())
 app.use(express.urlencoded({ extended: true }))
 app.use(express.static('public'))
 var email, userid, resp
-const port = 3000
+const port = 5000
 
 //Use the ApiKey and APISecret from config.js
 const payload = {
@@ -23,7 +26,7 @@ const token = jwt.sign(payload, config.APISecret)
 app.get('/', (req, res) => res.send(req.body))
 
 app.post('/newmeeting', (req, res) => {
-  console.log(token, 'token')
+  console.log('reqbody', token, 'token', req.body.email)
   email = req.body.email
   var options = {
     method: 'POST',
@@ -48,8 +51,58 @@ app.post('/newmeeting', (req, res) => {
 
   rp(options)
     .then(function (response) {
+      let transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: req.body.email, // TODO: your gmail account
+          pass: req.body.password, // TODO: your gmail password
+        },
+      })
+      let mailOptions = {
+        from: req.body.email, // TODO: email sender
+        to: req.body.recieveremail, // TODO: email receiver
+        subject: 'Zoom Join URL',
+        text: response.join_url,
+      }
+      transporter.sendMail(mailOptions, (err, data) => {
+        if (err) {
+          console.log('nodemailer error', err)
+        }
+        console.log('sucess email sent ')
+      })
       console.log('response is: ', response)
       res.send('create meeting result: ' + JSON.stringify(response))
+    })
+    .catch(function (err) {
+      // API call failed...
+      console.log('API call failed, reason ', err)
+    })
+})
+
+app.post('/sendinvitation', (req, res) => {
+  console.log('reqbody', token, 'token', req.body.meetingId)
+  meetingId = req.body.meetingId
+  var options = {
+    method: 'POST',
+    uri: 'https://api.zoom.us/v2/meetings/' + meetingId + '/registrants',
+    body: {
+      email: 'boyrocker706@gmail.com',
+      first_name: 'Arslan',
+    },
+    auth: {
+      bearer: token,
+    },
+    headers: {
+      'User-Agent': 'Zoom-api-Jwt-Request',
+      'content-type': 'application/json',
+    },
+    json: true, //Parse the JSON string in the response
+  }
+
+  rp(options)
+    .then(function (response) {
+      console.log('response is: ', response)
+      res.send('create meeting result: ' + response)
     })
     .catch(function (err) {
       // API call failed...
